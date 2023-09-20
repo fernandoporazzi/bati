@@ -3,13 +3,16 @@ Bitcoin address total investment
 
 With this cli you can know if a Bech32 Bitcoin address is profitable or not.
 
-It goes through each transaction of the given address and checks the USD price when the transaction was confirmed. 
+It goes through each __Utxo__(_a certain amount of cryptocurrency that has been authorized by a sender and is available to be spent by a recipient_) of the given address and checks the USD price when the transaction occured. 
 
 
 ## Running
 ```sh
-$ cargo run -- <BECH32_ADDRESS>
+$ cargo run -- --address=<BECH32_ADDRESS> --delay=<OPTIONAL_DELAY_IN_SECONDS>
 ```
+
+Due to a limitation on CoinGecko api, if an address has more than 30 utxos, the api will fail with `TOO_MANY_REQUESTS`. By adding a delay as env var when running the application, we can mitigate that. This deeply affects the UX, but it's the only option I could think of right now.
+
 
 ## Building
 

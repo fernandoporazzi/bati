@@ -1,18 +1,19 @@
-#![allow(unused)]
-
-use std::any::Any;
 use clap::Parser;
-use reqwest::Client;
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
-use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime};
-use chrono::format::ParseError;
+use chrono::{NaiveDateTime};
+use std::{thread, time};
 
 /// Search for a bitcoin address and display the total investment in USD.
 #[derive(Parser)]
 struct Cli {
-    // The bitcoin address to look for
+    /// The bitcoin address to look for
+    #[arg(short, long)]
     address: String,
+
+    /// For addresses with more than 30 Utxos, a delay can be applied to not be rate-limited by CoinGecko api
+    #[arg(short, long)]
+    delay: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -24,37 +25,11 @@ struct Status {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct Vout {
-    scriptpubkey: String,
-    scriptpubkey_asm: String,
-    scriptpubkey_type: String,
-    scriptpubkey_address: String,
-    value: i64,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct Vin {
+struct Utxo {
     txid: String,
     vout: i32,
-    prevout: Vout,
-    scriptsig: String,
-    scriptsig_asm: String,
-    // witness: Vec<String>,
-    is_coinbase: bool,
-    sequence: i64,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct Transaction {
-    txid: String,
-    version: i32,
-    locktime: i64,
-    vin: Vec<Vin>,
-    vout: Vec<Vout>,
-    size: i32,
-    weight: i32,
-    fee: i32,
     status: Status,
+    value: i64,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -77,12 +52,11 @@ struct ValuesAndBlockTimes {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let client = Client::new();
     let args = Cli::parse();
 
     println!("Calculating total investment for address {}", &args.address);
 
-    let uri = format!("https://mempool.space/api/address/{}/txs", &args.address);
+    let uri = format!("https://mempool.space/api/address/{}/utxo", &args.address);
     let resp = reqwest::get(uri)
         .await?;
 
@@ -96,48 +70,47 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    let data: Vec<Transaction> = resp
-        .json::<Vec<Transaction>>()
+    let data: Vec<Utxo> = resp
+        .json::<Vec<Utxo>>()
         .await?;
 
     let mut values_and_block_times: Vec<ValuesAndBlockTimes> = vec![];
-    let mut amount_of_transactions = 0;
 
-    for transaction in data {
+    let delay = time::Duration::from_secs(args.delay.unwrap_or(0));
+    let data_len = data.len();
 
-        for vout in transaction.vout {
-            if vout.scriptpubkey_address == args.address {
-                amount_of_transactions += 1;
+    for utxo in data {
+        let naive_datetime = NaiveDateTime::from_timestamp_millis(utxo.status.block_time.to_owned() * 1000).unwrap();
 
-                let naive_datetime = NaiveDateTime::from_timestamp_millis(transaction.status.block_time.to_owned() * 1000).unwrap();
+        let price_uri = format!("https://api.coingecko.com/api/v3/coins/bitcoin/history?date={}&localization=false", naive_datetime.format("%d-%m-%Y"));
 
-                let price_uri = format!("https://api.coingecko.com/api/v3/coins/bitcoin/history?date={}&localization=false", naive_datetime.format("%d-%m-%Y"));
+        let price_response = reqwest::get(price_uri)
+            .await?;
 
-                let price_response = reqwest::get(price_uri)
-                    .await?;
-
-                match price_response.status() {
-                    reqwest::StatusCode::OK => {}
-                    reqwest::StatusCode::TOO_MANY_REQUESTS => {
-                        panic!("Too many requests");
-                    }
-                    _ => {
-                        panic!("Uh oh! Something unexpected happened while fetching price data.");
-                    }
-                }
-
-                let price_data: MarketData = price_response.json::<MarketData>().await?;
-                let price_in_usd = price_data.market_data.current_price["usd"].to_owned();
-
-                let mut vabt: ValuesAndBlockTimes = ValuesAndBlockTimes {
-                    amount_of_sats: vout.value,
-                    price_in_usd,
-                    block_time: naive_datetime.format("%d-%m-%Y").to_string(),
-                    usd_value_when_received: price_in_usd.to_owned() * (vout.value.to_owned() as f64 / 100000000.0),
-                };
-
-                values_and_block_times.push(vabt);
+        match price_response.status() {
+            reqwest::StatusCode::OK => {}
+            reqwest::StatusCode::TOO_MANY_REQUESTS => {
+                panic!("Too many requests");
             }
+            _ => {
+                panic!("Uh oh! Something unexpected happened while fetching price data.");
+            }
+        }
+
+        let price_data: MarketData = price_response.json::<MarketData>().await?;
+        let price_in_usd = price_data.market_data.current_price["usd"].to_owned();
+
+        let vabt: ValuesAndBlockTimes = ValuesAndBlockTimes {
+            amount_of_sats: utxo.value,
+            price_in_usd,
+            block_time: naive_datetime.format("%d-%m-%Y").to_string(),
+            usd_value_when_received: price_in_usd.to_owned() * (utxo.value.to_owned() as f64 / 100000000.0),
+        };
+
+        values_and_block_times.push(vabt);
+
+        if data_len >= 20 {
+            thread::sleep(delay);
         }
     }
 
@@ -149,9 +122,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         total_values_when_received += vabt.usd_value_when_received;
     }
 
-    println!("Total amout of sats received: {}", total_sats);
+    println!("Utxo amount of sats: {}", total_sats);
     println!("Total amount invested USD: {:.2}", total_values_when_received);
-    // println!("Transactions: {}", amount_of_transactions);
+    // println!("Transactions: {}", data_len);
 
     println!();
     println!("HINT: if you want to know whether or not your address is profitable, check the balance on https://mempool.space/address/{}", &args.address);
