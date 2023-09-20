@@ -8,7 +8,7 @@ It goes through each __Utxo__(_a certain amount of cryptocurrency that has been 
 
 ## Running
 ```sh
-$ cargo run -- --address=<BECH32_ADDRESS> --delay=<OPTIONAL_DELAY_IN_SECONDS>
+$ cargo run -- --address=<BTC_ADDRESS> --delay=<OPTIONAL_DELAY_IN_SECONDS>
 ```
 
 Due to a limitation on CoinGecko api, if an address has more than 30 utxos, the api will fail with `TOO_MANY_REQUESTS`. By adding a delay as env var when running the application, we can mitigate that. This deeply affects the UX, but it's the only option I could think of right now.
