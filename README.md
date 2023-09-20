@@ -1,7 +1,7 @@
 # bati
 Bitcoin address total investment
 
-With this cli you can know if a Bech32 Bitcoin address is profitable or not.
+With this cli you can know if a Bitcoin address is profitable or not.
 
 It goes through each __Utxo__(_a certain amount of cryptocurrency that has been authorized by a sender and is available to be spent by a recipient_) of the given address and checks the USD price when the transaction occured. 
 
@@ -21,7 +21,6 @@ $ cargo build
 ```
 
 ## Known issues and limitations
-- This cli only supports Bech32 addresses.
 - If an address has more than 30 transactions, CoinGecko api will fail with a `TOO_MANY_REQUESTS` status code.
 
 ## Other
