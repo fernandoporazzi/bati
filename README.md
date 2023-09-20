@@ -24,3 +24,4 @@ $ cargo build
 ## Other
 I am not a Rust developer myself, so this app could definitely use help 😅
 
+<img width="1152" alt="Screenshot 2023-09-20 at 10 59 25" src="https://github.com/fernandoporazzi/bati/assets/2279686/dd41d704-3e37-4aa0-aae6-60967494fbba">
