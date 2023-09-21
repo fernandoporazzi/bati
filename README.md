@@ -22,6 +22,7 @@ $ cargo build
 
 ## Known issues and limitations
 - If an address has more than 30 transactions, CoinGecko api will fail with a `TOO_MANY_REQUESTS` status code.
+- CoinGecko only has historical price data from May 28th 2013. So if any address has transactions older than that, the app will crash. We can apply a handler for cases like this and assume a USD value of 0(zero) to avoid breaking the program.
 
 ## Other
 I am not a Rust developer myself, so this app could definitely use help 😅
